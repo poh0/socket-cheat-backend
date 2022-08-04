@@ -56,6 +56,101 @@ app.use((req, res, next) => {
     next()
 })
 
+// Socketing
+let users = [];
+
+const userExists = (userId) => {
+    return users.some((user) => user.userId === userId)
+}
+
+const addCommander = (userId, socketId) => {
+
+    user = getUser(userId)
+
+    if (user) {
+        console.log("Adding commander")
+        user.commanderSocket = socketId
+    } else {
+        console.log("new user (commander)")
+        users.push({
+            userId,
+            commanderSocket: socketId
+        })
+    }
+
+    console.log(user)
+};
+
+const addClient = (userId, socketId) => {
+    user = getUser(userId)
+
+    if (user) {
+        console.log("Adding client")
+        user.clientSocket = socketId
+    } else {
+        console.log("New user (client)")
+        users.push({
+            userId,
+            clientSocket: socketId
+        })
+    }
+};
+
+const removeCommander = (commanderSocket) => {
+  users = users.filter((user) => user.commanderSocket !== commanderSocket);
+};
+
+const removeClient = (clientSocket) => {
+  users = users.filter((user) => user.clientSocket !== clientSocket)
+}
+
+const getUser = (userId) => {
+  return users.find((user) => user.userId === userId);
+};
+
+// User object has { userId, commanderSocket, clientSocket }
+// Client app will have socket that receives commands from commander
+// Client app calls addCommander
+// Commander app has socket that calls sendOptions while client listens for getOptions 
+
+io.on("connection", (socket) => {
+  //when connect
+
+  socket.on("addCommander", (userId) => {
+    console.log("a commander connected.");
+    addCommander(userId, socket.id);
+  });
+
+  socket.on("addClient", (userId) => {
+    console.log("a client connected.");
+    addClient(userId, socket.id);
+  });
+
+  //send and get options
+  socket.on("sendOptions", ({ senderId, options }) => {
+    console.log("Commander sent options")
+    const user = getUser(senderId);
+    console.log(user)
+    io.to(user?.clientSocket).emit("getOptions", {
+      senderId,
+      options,
+    });
+  });
+
+  //when disconnect
+  socket.on("disconnectCommander", () => {
+    console.log("a commander disconnected!");
+    removeCommander(socket.id);
+    io.emit("getUsers", users);
+  });
+
+  socket.on("disconnectClient", () => {
+    console.log("a client disconnected!");
+    removeClient(socket.id);
+    io.emit("getUsers", users);
+  });
+});
+
 // Routes
 app.use('/api/users', require('./routes/userRoutes'))
 app.use('/api/cheat', require('./routes/cheatRoutes'))
