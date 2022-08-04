@@ -20,6 +20,7 @@ def connect_error(data):
 
 @sio.event
 def disconnect():
+    sio.emit("disconnectClient")
     print("I'm disconnected!")
 
 @sio.event
@@ -29,7 +30,7 @@ def message(data):
 @sio.on('getOptions')
 def get_options(data):
     print('Settings changed')
-    print(data)
+    print(data["options"])
 
 
 sio.connect(API_URL)
