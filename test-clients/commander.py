@@ -9,13 +9,18 @@ user = "62eb13c65cb199ccc479890d"
 
 API_URL = "http://localhost:3000"
 
+settings = {
+    "bhop": True,
+    "esp": True
+}
+
 def ask_bot_value():
     while True:
-        val = input("Give aimbot value: ")
-        sio.emit("sendOptions", {
-            "senderId": user,
-            "options": "aimbot: " + val
-        })
+        input()
+        settings["bhop"] = not settings["bhop"]
+        settings["esp"] = not settings["esp"]
+        print(settings)
+        sio.emit("sendOptions", data=(user, settings))
 
 @sio.event
 def connect():

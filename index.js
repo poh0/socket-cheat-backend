@@ -127,14 +127,12 @@ io.on("connection", (socket) => {
   });
 
   //send and get options
-  socket.on("sendOptions", ({ senderId, options }) => {
+  socket.on("sendOptions", (senderId, options) => {
+    console.log(options)
     console.log("Commander sent options")
     const user = getUser(senderId);
     console.log(user)
-    io.to(user?.clientSocket).emit("getOptions", {
-      senderId,
-      options,
-    });
+    io.to(user?.clientSocket).emit("getOptions", options);
   });
 
   //when disconnect
