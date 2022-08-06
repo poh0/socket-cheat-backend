@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs')
 const jwt = require("jsonwebtoken")
 const User = require('../models/User')
+const CheatConfig = require("../models/CheatConfig")
 
 // @desc    Register user
 // @route   POST api/users/register
@@ -31,6 +32,12 @@ const register = async (req, res) => {
     })
 
     if (user) {
+        
+        // Create config for user
+        const cheatConfig = await CheatConfig.create({
+            user: user.id
+        })
+
         res.status(201).json({
           success: true,
           _id: user.id,
