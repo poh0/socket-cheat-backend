@@ -11,7 +11,7 @@ API_URL = "http://localhost:3000"
 @sio.event
 def connect():
     print("I'm connected!")
-    sio.emit("addClient", user)
+    sio.emit("addClient")
     print("Waiting for commander")
 
 @sio.event
@@ -30,7 +30,22 @@ def message(data):
 @sio.on('getOptions')
 def get_options(data):
     print('Settings changed')
-    print(data["options"])
+    print(data)
 
+@sio.on('commanderConnected')
+def commander_connected():
+    print('Commander connected!')
 
-sio.connect(API_URL)
+@sio.on('commanderDisconnected')
+def commander_disconnect():
+    print('Commander disconnected')
+    print('Waiting for commander')
+
+res = requests.post(API_URL + '/api/users/authenticate', {
+    'email': 'test@cheat.dev',
+    'password': '123'
+})
+
+token = res.json()['token']
+
+sio.connect(API_URL + '?token=' + token + "&type=client")

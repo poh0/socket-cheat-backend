@@ -6,6 +6,8 @@ const passport = require('passport')
 const session = require('express-session')
 const cors = require('cors')
 const path = require('path');
+const jwt = require('jsonwebtoken')
+const { getSystemErrorMap } = require('util')
 
 // Connect to db
 mongoose.connect(process.env.MONGO_URI)
@@ -32,8 +34,6 @@ app.use(passport.initialize())
 app.use(passport.session())
 require("./config/passport")(passport)
 
-
-
 app.get('/', (req, res) => {
     res.send('invaild endpoint');
 });
@@ -50,18 +50,7 @@ const server = app.listen(port, () => console.log(`Server started on port ${port
 // Sockets
 const io = require("socket.io")(server)
 
-// Include socket object to every request
-app.use((req, res, next) => {
-    req.io = io
-    next()
-})
-
-// Socketing
 let users = [];
-
-const userExists = (userId) => {
-    return users.some((user) => user.userId === userId)
-}
 
 const addCommander = (userId, socketId) => {
 
@@ -71,7 +60,7 @@ const addCommander = (userId, socketId) => {
         console.log("Adding commander")
         user.commanderSocket = socketId
     } else {
-        console.log("new user (commander)")
+        console.log("New user (commander)")
         users.push({
             userId,
             commanderSocket: socketId
@@ -96,56 +85,62 @@ const addClient = (userId, socketId) => {
     }
 };
 
-const removeCommander = (commanderSocket) => {
-  users = users.filter((user) => user.commanderSocket !== commanderSocket);
-};
-
-const removeClient = (clientSocket) => {
-  users = users.filter((user) => user.clientSocket !== clientSocket)
-}
-
 const getUser = (userId) => {
   return users.find((user) => user.userId === userId);
 };
 
-// User object has { userId, commanderSocket, clientSocket }
-// Client app will have socket that receives commands from commander
-// Client app calls addCommander
-// Commander app has socket that calls sendOptions while client listens for getOptions 
+io.use((socket, next) => {
+  const token = socket.handshake.query.token
+  const socketType = socket.handshake.query.type
+  if (token && (socketType === 'commander' || socketType === 'client')) {
+    jwt.verify(token.slice(4), process.env.JWT_SECRET, (err, decoded) => {
+      if (err) return next(new Error('Authentication error'));
+      socket.decoded = decoded
+      socket.socketType = socketType
+      next()
+    })
+  } else {
+    next(new Error('Authentication error'));
+  }
+})
 
 io.on("connection", (socket) => {
-  //when connect
 
-  socket.on("addCommander", (userId) => {
-    console.log("a commander connected.");
-    addCommander(userId, socket.id);
-  });
+  if (socket.socketType === 'commander') {
+    const user = getUser(socket.decoded.id)
+    if (user) {
+      io.to(user?.clientSocket).emit("commanderConnected")
+    }
+    addCommander(socket.decoded.id, socket.id);
+  }
+  else if (socket.socketType === 'client') {
+    const user = getUser(socket.decoded.id)
+    if (user) {
+      io.to(user?.commanderSocket).emit("clientConnected")
+    }
+    addClient(socket.decoded.id, socket.id);
+  }
 
-  socket.on("addClient", (userId) => {
-    console.log("a client connected.");
-    addClient(userId, socket.id);
-  });
-
-  //send and get options
-  socket.on("sendOptions", (senderId, options) => {
-    console.log(options)
+  //magic
+  socket.on("sendOptions", (options) => {
     console.log("Commander sent options")
-    const user = getUser(senderId);
-    console.log(user)
+    const user = getUser(socket.decoded.id);
     io.to(user?.clientSocket).emit("getOptions", options);
   });
 
-  //when disconnect
-  socket.on("disconnectCommander", () => {
-    console.log("a commander disconnected!");
-    removeCommander(socket.id);
-    io.emit("getUsers", users);
-  });
-
-  socket.on("disconnectClient", () => {
-    console.log("a client disconnected!");
-    removeClient(socket.id);
-    io.emit("getUsers", users);
+  socket.on("disconnect", () => {
+    if (socket.socketType === 'commander') {
+      const user = getUser(socket.decoded.id)
+      if (user) {
+        io.to(user?.clientSocket).emit("commanderDisconnected")
+      }
+    }
+    else if (socket.socketType === 'client') {
+      const user = getUser(socket.decoded.id)
+      if (user) {
+        io.to(user?.commanderSocket).emit("clientDisconnected")
+      }
+    }
   });
 });
 

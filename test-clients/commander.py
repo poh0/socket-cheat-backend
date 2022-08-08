@@ -19,13 +19,11 @@ def ask_bot_value():
         input()
         settings["bhop"] = not settings["bhop"]
         settings["esp"] = not settings["esp"]
-        print(settings)
-        sio.emit("sendOptions", data=(user, settings))
+        sio.emit("sendOptions", settings)
 
 @sio.event
 def connect():
     print("I'm connected!")
-    sio.emit("addCommander", user)
     ask_bot_value()
 
 @sio.event
@@ -45,4 +43,11 @@ def message(data):
 def on_message(data):
     print('I received a message!')
 
-sio.connect(API_URL)
+res = requests.post(API_URL + '/api/users/authenticate', {
+    'email': 'test@cheat.dev',
+    'password': '123'
+})
+
+token = res.json()['token']
+print(token)
+sio.connect(API_URL + '?token=' + token + "&type=commander")
