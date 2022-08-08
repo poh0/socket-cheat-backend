@@ -66,8 +66,6 @@ const addCommander = (userId, socketId) => {
             commanderSocket: socketId
         })
     }
-
-    console.log(user)
 };
 
 const addClient = (userId, socketId) => {
@@ -95,8 +93,8 @@ io.use((socket, next) => {
   if (token && (socketType === 'commander' || socketType === 'client')) {
     jwt.verify(token.slice(4), process.env.JWT_SECRET, (err, decoded) => {
       if (err) return next(new Error('Authentication error'));
-      socket.decoded = decoded
       socket.socketType = socketType
+      socket.user = decoded.data._id
       next()
     })
   } else {
@@ -105,40 +103,54 @@ io.use((socket, next) => {
 })
 
 io.on("connection", (socket) => {
-
+  console.log(socket.user)
   if (socket.socketType === 'commander') {
-    const user = getUser(socket.decoded.id)
+    const user = getUser(socket.user)
     if (user) {
       io.to(user?.clientSocket).emit("commanderConnected")
+    } else {
+      io.to(socket.id).emit("waitingForClient")
     }
-    addCommander(socket.decoded.id, socket.id);
+    addCommander(socket.user, socket.id);
   }
   else if (socket.socketType === 'client') {
-    const user = getUser(socket.decoded.id)
+    const user = getUser(socket.user)
     if (user) {
       io.to(user?.commanderSocket).emit("clientConnected")
+    } else {
+      io.to(socket.id).emit("waitingForCommander")
     }
-    addClient(socket.decoded.id, socket.id);
+    addClient(socket.user, socket.id);
   }
 
   //magic
   socket.on("sendOptions", (options) => {
     console.log("Commander sent options")
-    const user = getUser(socket.decoded.id);
+    const user = getUser(socket.user);
     io.to(user?.clientSocket).emit("getOptions", options);
   });
 
   socket.on("disconnect", () => {
     if (socket.socketType === 'commander') {
-      const user = getUser(socket.decoded.id)
-      if (user) {
+      const user = getUser(socket.user)
+      if (user.hasOwnProperty("clientSocket")) {
+        delete user.commanderSocket
         io.to(user?.clientSocket).emit("commanderDisconnected")
+      } else {
+        users = users.filter((userobj) => user.userId !== userobj.userId)
       }
     }
+    // when a client disconnects, we check if the user object has the commanderSocket key
+    // if it doesn't have it, we delete the whole object
+    // if it has it, we delete the clientObject key and emit clientDisconnected.
     else if (socket.socketType === 'client') {
-      const user = getUser(socket.decoded.id)
-      if (user) {
+      const user = getUser(socket.user)
+
+      if (user.hasOwnProperty("commanderSocket")) {
+        delete user.clientSocket
         io.to(user?.commanderSocket).emit("clientDisconnected")
+      } else {
+        users = users.filter((userobj) => user.userId !== userobj.userId)
       }
     }
   });

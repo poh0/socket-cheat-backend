@@ -75,7 +75,7 @@ const authenticate = async (req, res) => {
             token: 'JWT '+ generateToken(user),
         })
     } else {
-        return res.status(400).json({msg: 'Invalid credentials'})
+        return res.status(400).json({success: false, msg: 'Invalid credentials'})
     }
 }
 
